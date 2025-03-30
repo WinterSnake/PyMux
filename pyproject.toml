@@ -2,6 +2,7 @@
 name = "pymux"
 version = "1.0.0"
 description = "A tmux session manager written in Python. Allows you to save/load windows, panes, layouts, and applications."
+dependencies = [ "toml" ]
 
 [project.scripts]
 pymux = "pymux.__main__:_entry"

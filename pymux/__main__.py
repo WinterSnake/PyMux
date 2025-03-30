@@ -7,38 +7,24 @@
 ## Imports
 import sys
 import subprocess
-import toml
-from .parser import parse_layout
+import toml  # type: ignore
+from .widget import Widget, parse_widget
 
 
 ## Functions
-def calculate_checksum(source: str) -> int:
-    checksum: int = 0
-    for c in source:
-        checksum = (checksum >> 1) + ((checksum & 1) << 15)
-        checksum += ord(c)
-    return checksum
-
-
 def _entry() -> None:
     # -<SAVE>
     # list-windows + layout
     result = subprocess.run(['tmux', 'list-windows', '-F', '"#{window_layout}"'], capture_output=True, text=True)
-    for i, window in enumerate(result.stdout.split('\n')):
+    for i, layout in enumerate(result.stdout.split('\n')):
         # -Ignore empty
-        if window == '':
+        if layout == '':
             continue
         # -Remove quotes
-        window = window[1:-1]
-        # -Validate checksum
-        checksum = int(window[:4], 16)
-        window = window[5:]
-        assert checksum == calculate_checksum(window)
-        # -Layout
-        print(f"Input[{i}] '{window}'")
-        wind = parse_layout(window)
-        print(wind)
-        # -Window
+        layout = layout[1:-1]
+        window = Widget.from_layout(layout)
+        print(f"Input[{i}]  '{layout[5:]}'")
+        print(f"Output[{i}] '{window}'")
 
 
 ## Body

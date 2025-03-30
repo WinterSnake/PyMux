@@ -96,19 +96,16 @@ class Widget:
         widget: str = f"{self.width}x{self.height},{self.x},{self.y}"
         if not self.children:
             return widget + f",{self.id}"
-        if self.orientation == 'horizontal':
-            widget += '{'
-        else:
-            widget += '['
+        children: str = ''
         for i, child in enumerate(self.children):
-            widget += str(child)
+            children += str(child)
             if i < len(self.children) - 1:
-                widget += ','
+                children += ','
         if self.orientation == 'horizontal':
-            widget += '}'
-        else:
-            widget += ']'
-        return widget
+            return widget + '{' + children + '}'
+        elif self.orientation == 'vertical':
+            return widget + '[' + children + ']'
+        raise ValueError("Orientation expected to be 'horizontal' or 'vertical', got: '{self.orientation}'")
 
     # -Class Methods
     @classmethod
@@ -122,7 +119,9 @@ class Widget:
     # -Properties
     @property
     def id(self) -> int:
-        return self._id if self._id is not None else 0
+        if self._id is None:
+            self._id = 0
+        return self._id
 
     @property
     def layout(self) -> str:

@@ -125,6 +125,10 @@ class Widget:
         return self._id if self._id is not None else 0
 
     @property
+    def layout(self) -> str:
+        return f"{calculate_checksum(str(self)):4x},{self}"
+
+    @property
     def x(self) -> int:
         return self.position[0]
 

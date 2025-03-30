@@ -15,6 +15,8 @@ from .widget import Widget
 ## Classes
 class Session:
     """
+    Tmux Session
+    Represents a tmux session with details to restore/save/load
     """
 
     # -Constructor
@@ -31,11 +33,19 @@ class Session:
                 session += '\n'
         return session
 
+    # -Instance Methods
+    def attach(self) -> None:
+        '''Attach session to client'''
+        subprocess.run(['tmux', 'attach-session', '-t', self.name])
+
+    def close(self) -> None:
+        '''Close and kill session'''
+        subprocess.run(['tmux', 'kill-session', '-t', self.name])
+
     # -Static Methods
     @staticmethod
     def current() -> Session | None:
-        '''
-        '''
+        '''Gets currently open session'''
         name = subprocess.run(
             ['tmux', 'display-message', '-p', '#{session_name}'],
             capture_output=True, text=True
@@ -55,10 +65,21 @@ class Session:
             # -TODO: Processes
         return session
 
+    @staticmethod
+    def get_if_exists(name: str) -> Session | None:
+        '''Returns tmux session if it exists'''
+        result = subprocess.run(
+            ['tmux', 'has-session', '-t', name],
+            stderr=subprocess.DEVNULL,
+        )
+        if result.returncode != 0:
+            return None
+        session = Session(name)
+        return session
+
     # -Class Methods
     @classmethod
     def new(cls, name: str) -> Session:
-        '''
-        '''
-        # -TODO: Start session
+        '''Create a new tmux session and return object'''
+        subprocess.run(['tmux', 'new-session', '-d', '-s', name])
         return Session(name)

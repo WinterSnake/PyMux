@@ -64,7 +64,12 @@ def _entry() -> None:
     elif mode == 'load':
         with open(".pymux-session", 'r') as f:
             data = toml.load(f)
-        # -Create Session object
+        # -Reattach Session
+        session: Session | None
+        if session := Session.get_if_exists(data['project']['name']):
+            session.attach()
+            return
+        # -Create Session
         session = Session.new(data['project']['name'])
         for window in data['window']:
             wind = Widget(tuple(window['pos']), tuple(window['size']))

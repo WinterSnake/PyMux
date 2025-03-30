@@ -54,3 +54,11 @@ class Session:
             session.windows.append(window)
             # -TODO: Processes
         return session
+
+    # -Class Methods
+    @classmethod
+    def new(cls, name: str) -> Session:
+        '''
+        '''
+        # -TODO: Start session
+        return Session(name)

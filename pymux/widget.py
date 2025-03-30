@@ -107,6 +107,19 @@ class Widget:
             return widget + '[' + children + ']'
         raise ValueError("Orientation expected to be 'horizontal' or 'vertical', got: '{self.orientation}'")
 
+    # -Instance Methods
+    def get_or_create_child(
+        self, position: tuple[int, int], size: tuple[int, int],
+        orientation: ORIENTATION = None,
+    ) -> Widget:
+        ''''''
+        for child in self.children:
+            if child.position == position and child.size == size and child.orientation == orientation:
+                return child
+        child = Widget(position, size, orientation)
+        self.children.append(child)
+        return child
+
     # -Class Methods
     @classmethod
     def from_layout(cls, source: str) -> Widget:
@@ -120,7 +133,8 @@ class Widget:
     @property
     def id(self) -> int:
         if self._id is None:
-            self._id = 0
+            self._id = Widget._Id
+            Widget._Id += 1
         return self._id
 
     @property
@@ -158,3 +172,6 @@ class Widget:
     @height.setter
     def height(self, value: int) -> None:
         self.size = (self.width, value)
+
+    # -Class Property
+    _Id: ClassVar[int] = 1

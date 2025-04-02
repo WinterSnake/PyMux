@@ -3,12 +3,12 @@
 ## PyMux                         ##
 ## Written By: Ryan Smith        ##
 ##-------------------------------##
-## Session                       ##
+## Widget                        ##
 ##-------------------------------##
 
 ## Imports
 from __future__ import annotations
-from typing import ClassVar, Literal
+from typing import ClassVar, Literal, Self
 
 ## Constants
 type ORIENTATION = Literal['horizontal', 'vertical'] | None
@@ -86,6 +86,26 @@ class Widget:
         self.children: list[Widget] = []
 
     # -Dunder Methods
+    def __iter__(self) -> Self:
+        self._index: int = 0
+        self._index_stack: list[Widget] = self.children[:]
+        return self
+
+    def __next__(self) -> Widget:
+        if self._index >= len(self):
+            raise StopIteration()
+        widget: Widget
+        if not self.children:
+            widget = self
+        else:
+            while self._index_stack:
+                widget = self._index_stack.pop()
+                if not widget.children:
+                    break
+                self._index_stack.extend(widget.children)
+        self._index += 1
+        return widget
+
     def __len__(self) -> int:
         if not self.children:
             return 1

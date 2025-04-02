@@ -8,10 +8,9 @@
 
 ## Imports
 from __future__ import annotations
-from typing import Literal
+from typing import ClassVar, Literal
 
 ## Constants
-__all__: tuple[str, ...] = ("Widget", "calculate_checksum", "parse_widget")
 type ORIENTATION = Literal["horizontal", "vertical"] | None
 
 
@@ -23,11 +22,6 @@ def calculate_checksum(source: str) -> int:
         checksum = (checksum >> 1) + ((checksum & 1) << 15)
         checksum += ord(c)
     return checksum
-
-
-def parse_widget(source: str) -> Widget:
-    """Parse tmux layout string into Widget"""
-    return _parse_widget(source, 0)[1]
 
 
 def _parse_widget(source: str, offset: int) -> tuple[int, Widget]:
@@ -81,17 +75,29 @@ class Widget:
     # -Constructor
     def __init__(
         self, position: tuple[int, int], size: tuple[int, int],
-        orientation: ORIENTATION = None,
     ) -> None:
         self._id: int | None = None
         # -Dimensions
         self.position: tuple[int, int] = position
         self.size: tuple[int, int] = size
         # -Children
-        self.orientation: ORIENTATION = orientation
+        self.orientation: ORIENTATION = None
         self.children: list[Widget] = []
 
     # -Dunder Methods
+    def __len__(self) -> int:
+        if not self.children:
+            return 1
+        count: int = 0
+        child_stack: list[Widget] = self.children
+        while child_stack:
+            widget = child_stack.pop()
+            if widget.children:
+                child_stack.extend(widget.children)
+            else:
+                count += 1
+        return count
+
     def __str__(self) -> str:
         widget: str = f"{self.width}x{self.height},{self.x},{self.y}"
         if not self.children:
@@ -108,17 +114,13 @@ class Widget:
         raise ValueError("Orientation expected to be 'horizontal' or 'vertical', got: '{self.orientation}'")
 
     # -Instance Methods
-    def get_or_create_child(
-        self, position: tuple[int, int], size: tuple[int, int],
-        orientation: ORIENTATION = None,
-    ) -> Widget:
-        ''''''
+    def sort(self) -> None:
+        '''Sort widget and it's children by X/Y'''
+        if not self.children:
+            return
+        self.children.sort(key=lambda k: (k.x, k.y))
         for child in self.children:
-            if child.position == position and child.size == size and child.orientation == orientation:
-                return child
-        child = Widget(position, size, orientation)
-        self.children.append(child)
-        return child
+            child.sort()
 
     # -Class Methods
     @classmethod
@@ -127,7 +129,7 @@ class Widget:
         checksum = int(source[:4], 16)
         source = source[5:]
         assert checksum == calculate_checksum(source)
-        return parse_widget(source)
+        return _parse_widget(source, 0)[1]
 
     # -Properties
     @property
@@ -139,7 +141,7 @@ class Widget:
 
     @property
     def layout(self) -> str:
-        return f"{calculate_checksum(str(self)):4x},{self}"
+        return f"{calculate_checksum(str(self)):04x},{self}"
 
     @property
     def x(self) -> int:

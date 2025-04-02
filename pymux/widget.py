@@ -3,7 +3,7 @@
 ## PyMux                         ##
 ## Written By: Ryan Smith        ##
 ##-------------------------------##
-## Widget                        ##
+## Session                       ##
 ##-------------------------------##
 
 ## Imports
@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import ClassVar, Literal
 
 ## Constants
-type ORIENTATION = Literal["horizontal", "vertical"] | None
+type ORIENTATION = Literal['horizontal', 'vertical'] | None
 
 
 ## Functions
@@ -27,20 +27,20 @@ def calculate_checksum(source: str) -> int:
 def _parse_widget(source: str, offset: int) -> tuple[int, Widget]:
     """Parse tmux widget structure with id or nesting"""
     offset, obj = _parse_dimensions(source, offset)
-    # -Id
+    # -Object Id
     if source[offset] == ',':
         offset, obj._id = _parse_int(source, offset + 1)
-    # -Nest: Vertical
-    elif source[offset] == '[':
-        obj.orientation = "vertical"
-        while source[offset] != ']':
+    # -Object Nesting: Horizontal
+    elif source[offset] == '{':
+        obj.orientation = 'horizontal'
+        while source[offset] != '}':
             offset, child = _parse_widget(source, offset + 1)
             obj.children.append(child)
         offset += 1
-    # -Nest: Horizontal
-    elif source[offset] == '{':
-        obj.orientation = "horizontal"
-        while source[offset] != '}':
+    # -Object Nesting: Vertical
+    elif source[offset] == '[':
+        obj.orientation = 'vertical'
+        while source[offset] != ']':
             offset, child = _parse_widget(source, offset + 1)
             obj.children.append(child)
         offset += 1
@@ -53,14 +53,15 @@ def _parse_dimensions(source: str, offset: int) -> tuple[int, Widget]:
     offset, height = _parse_int(source, offset + 1)
     offset, x = _parse_int(source, offset + 1)
     offset, y = _parse_int(source, offset + 1)
-    return (offset, Widget((x, y), (width, height)))
+    widget = Widget(x, y, width, height)
+    return (offset, widget)
 
 
 def _parse_int(source: str, offset: int) -> tuple[int, int]:
     """Parse int from source"""
     value: int = 0
-    while len(source) > offset and (c := source[offset]).isdigit():
-        value = value * 10 + int(c)
+    while len(source) > offset and source[offset].isdigit():
+        value = value * 10 + int(source[offset])
         offset += 1
     return (offset, value)
 
@@ -73,13 +74,13 @@ class Widget:
     """
 
     # -Constructor
-    def __init__(
-        self, position: tuple[int, int], size: tuple[int, int],
-    ) -> None:
+    def __init__(self, x: int, y: int, width: int, height: int) -> None:
         self._id: int | None = None
         # -Dimensions
-        self.position: tuple[int, int] = position
-        self.size: tuple[int, int] = size
+        self.x: int = x
+        self.y: int = y
+        self.width: int = width
+        self.height: int = height
         # -Children
         self.orientation: ORIENTATION = None
         self.children: list[Widget] = []
@@ -89,11 +90,11 @@ class Widget:
         if not self.children:
             return 1
         count: int = 0
-        child_stack: list[Widget] = self.children
+        child_stack: list[Widget] = self.children[:]
         while child_stack:
-            widget = child_stack.pop()
-            if widget.children:
-                child_stack.extend(widget.children)
+            child = child_stack.pop()
+            if child.children:
+                child_stack.extend(child.children)
             else:
                 count += 1
         return count
@@ -102,11 +103,7 @@ class Widget:
         widget: str = f"{self.width}x{self.height},{self.x},{self.y}"
         if not self.children:
             return widget + f",{self.id}"
-        children: str = ''
-        for i, child in enumerate(self.children):
-            children += str(child)
-            if i < len(self.children) - 1:
-                children += ','
+        children: str = ','.join(str(child) for child in self.children)
         if self.orientation == 'horizontal':
             return widget + '{' + children + '}'
         elif self.orientation == 'vertical':
@@ -114,6 +111,15 @@ class Widget:
         raise ValueError("Orientation expected to be 'horizontal' or 'vertical', got: '{self.orientation}'")
 
     # -Instance Methods
+    def find_by_id(self, _id: int) -> Widget | None:
+        '''Find a given widget by it's id'''
+        if self._id == _id:
+            return self
+        for child in self.children:
+            if (w := child.find_by_id(_id)) is not None:
+                return w
+        return None
+
     def sort(self) -> None:
         '''Sort widget and it's children by X/Y'''
         if not self.children:
@@ -144,36 +150,12 @@ class Widget:
         return f"{calculate_checksum(str(self)):04x},{self}"
 
     @property
-    def x(self) -> int:
-        return self.position[0]
-
-    @x.setter
-    def x(self, value: int) -> None:
-        self.position = (value, self.y)
+    def position(self) -> tuple[int, int]:
+        return (self.x, self.y)
 
     @property
-    def y(self) -> int:
-        return self.position[1]
+    def size(self) -> tuple[int, int]:
+        return (self.width, self.height)
 
-    @y.setter
-    def y(self, value: int) -> None:
-        self.position = (self.x, value)
-
-    @property
-    def width(self) -> int:
-        return self.size[0]
-
-    @width.setter
-    def width(self, value: int) -> None:
-        self.size = (value, self.height)
-
-    @property
-    def height(self) -> int:
-        return self.size[1]
-
-    @height.setter
-    def height(self, value: int) -> None:
-        self.size = (self.width, value)
-
-    # -Class Property
+    # -Class Properties
     _Id: ClassVar[int] = 1

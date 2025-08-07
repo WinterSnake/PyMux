@@ -7,7 +7,7 @@
 
 ## Imports
 from __future__ import annotations
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from typing import Literal
 
 ## Constants
@@ -28,30 +28,33 @@ def calculate_checksum(source: str) -> int:
     return checksum
 
 
-def parse_widget(source: str) -> tuple[str, Widget]:
+def parse_widget(cls: type[Widget], source: str) -> tuple[str, Widget]:
     """Parse a tmux source string into a nested widget"""
     source, area = _parse_dimensions(source)
     # -Id
     if source[0] == ',':
         source, _id = _parse_int(source[1:])
-        return (source, Widget(_id, area))
+        return (source, cls(_id, area))
     # -Nested Children
     children = []
     orientation, end = NEST_ORIENTATION[source[0]]
-    source, child = parse_widget(source[1:])
+    source, child = parse_widget(cls, source[1:])
     children.append(child)
     while source[0] == ',':
-        source, child = parse_widget(source[1:])
+        source, child = parse_widget(cls, source[1:])
         children.append(child)
     assert source[0] == end
-    return (source[1:], Widget(None, area, orientation, children))
+    return (source[1:], cls(None, area, orientation, children))
 
 
 def _parse_dimensions(source: str) -> tuple[str, Rectangle]:
     """Parse widget dimensions from tmux source string {x, y, w, h}"""
     source, width = _parse_int(source)
+    assert source[0] == 'x'
     source, height = _parse_int(source[1:])
+    assert source[0] == ','
     source, x = _parse_int(source[1:])
+    assert source[0] == ','
     source, y = _parse_int(source[1:])
     return (source, Rectangle(x, y, width, height))
 
@@ -111,6 +114,7 @@ class Widget:
         self.area: Rectangle = area
         self.orientation: ORIENTATION = orientation
         self.children: Iterable[Widget] | None = children
+        self.name: str | None = None
 
     # -Dunder Methods
     def __str__(self) -> str:
@@ -129,13 +133,18 @@ class Widget:
     # -Class Methods
     @classmethod
     def from_layout(cls, layout: str) -> Widget:
-        '''Validate widget from a source and return widget'''
+        '''Validate checksum from a source layout and return widget'''
         checksum = int(layout[:4], 16)
         source = layout[5:]
         calculated_checksum = calculate_checksum(source)
         if calculated_checksum != checksum:
             raise ValueError(f"Checksum failed, expected: {checksum:04X}; actual: {calculated_checksum:04X}")
-        return parse_widget(source)[1]
+        return parse_widget(cls, source)[1]
+
+    @classmethod
+    def from_string(cls, source: str) -> Widget:
+        '''Return widget from a base tmux layout string'''
+        return parse_widget(cls, source)[1]
 
     # -Properties
     @property

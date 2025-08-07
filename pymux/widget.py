@@ -11,7 +11,11 @@ from collections.abc import Iterable
 from typing import Literal
 
 ## Constants
-ORIENTATION = Literal["horizontal"] | Literal["vertical"] | None
+ORIENTATION = Literal["horizontal", "vertical"] | None
+NEST_ORIENTATION: dict[str, tuple[ORIENTATION, str]] = {
+    '[': ('horizontal', ']'),
+    '{': ('vertical', '}'),
+}
 
 
 ## Functions
@@ -23,46 +27,33 @@ def calculate_checksum(source: str) -> int:
         checksum = (checksum + ord(c)) & 0xFFFF
     return checksum
 
+
 def parse_widget(source: str) -> tuple[str, Widget]:
     """Parse a tmux source string into a nested widget"""
-    source, dimensions = _parse_dimensions(source)
+    source, area = _parse_dimensions(source)
     # -Id
     if source[0] == ',':
         source, _id = _parse_int(source[1:])
-        return (source, Widget(dimensions, _id))
-    # -Nest: Horizontal
-    elif source[0] == '{':
-        source, children = _parse_children(source[1:])
-        widget = Widget(dimensions, None, 'horizontal', children)
-        assert source[0] == '}'
-        return (source[1:], widget)
-    # -Nest: Vertical
-    elif source[0] == '[':
-        source, children = _parse_children(source[1:])
-        widget = Widget(dimensions, None, 'vertical', children)
-        assert source[0] == ']'
-        return (source[1:], widget)
-    raise ValueError(f"Invalid layout string: {source}")
-
-
-def _parse_children(source: str) -> tuple[str, list[Widget]]:
-    """Return all parsed children widgets"""
+        return (source, Widget(_id, area))
+    # -Nested Children
     children = []
-    source, widget = parse_widget(source)
-    children.append(widget)
+    orientation, end = NEST_ORIENTATION[source[0]]
+    source, child = parse_widget(source[1:])
+    children.append(child)
     while source[0] == ',':
-        source, widget = parse_widget(source[1:])
-        children.append(widget)
-    return (source, children)
+        source, child = parse_widget(source[1:])
+        children.append(child)
+    assert source[0] == end
+    return (source[1:], Widget(None, area, orientation, children))
 
 
-def _parse_dimensions(source: str) -> tuple[str, tuple[int, int, int, int]]:
+def _parse_dimensions(source: str) -> tuple[str, Rectangle]:
     """Parse widget dimensions from tmux source string {x, y, w, h}"""
     source, width = _parse_int(source)
     source, height = _parse_int(source[1:])
     source, x = _parse_int(source[1:])
     source, y = _parse_int(source[1:])
-    return (source, (x, y, width, height))
+    return (source, Rectangle(x, y, width, height))
 
 
 def _parse_int(source: str) -> tuple[str, int]:
@@ -75,6 +66,35 @@ def _parse_int(source: str) -> tuple[str, int]:
 
 
 ## Classes
+class Rectangle:
+
+    # -Constructor
+    def __init__(self, x: int, y: int, width: int, height: int) -> None:
+        self.x: int = x
+        self.y: int = y
+        self.width: int = width
+        self.height: int = height
+
+    # -Properties
+    @property
+    def position(self) -> tuple[int, int]:
+        return (self.x, self.y)
+
+    @position.setter
+    def position(self, value: tuple[int, int]) -> None:
+        self.x = value[0]
+        self.y = value[1]
+
+    @property
+    def size(self) -> tuple[int, int]:
+        return (self.width, self.height)
+
+    @size.setter
+    def size(self, value: tuple[int, int]) -> None:
+        self.width = value[0]
+        self.height = value[1]
+
+
 class Widget:
     """
     Tmux Widget 
@@ -84,28 +104,27 @@ class Widget:
 
     # -Constructor
     def __init__(
-        self, dimensions: tuple[int, int, int, int],
-        _id: int | None, orientation: ORIENTATION = None,
-        children: Iterable[Widget] | None = None
+        self, _id: int | None, area: Rectangle,
+        orientation: ORIENTATION = None, children: Iterable[Widget] | None = None
     ) -> None:
         self.id: int | None = _id
-        self.position: tuple[int, int] = (dimensions[0], dimensions[1])
-        self.size: tuple[int, int] = (dimensions[2], dimensions[3])
+        self.area: Rectangle = area
         self.orientation: ORIENTATION = orientation
         self.children: Iterable[Widget] | None = children
 
     # -Dunder Methods
     def __str__(self) -> str:
-        _str = f"{self.width}x{self.height},{self.x},{self.y}"
-        # -Id
+        _str = f"{self.area.width}x{self.area.height},{self.area.x},{self.area.y}"
         if not self.children:
             return _str + f",{self.id}"
         # -Children
+        assert self.orientation is not None
         children = ','.join(str(child) for child in self.children)
-        if self.orientation == 'horizontal':
-            return _str + '{' + children + '}'
-        else:
-            return _str + '[' + children + ']'
+        start, end = {
+            'horizontal': ('[', ']'),
+            'vertical': ('{', '}'),
+        }[self.orientation]
+        return _str + start + children + end
 
     # -Class Methods
     @classmethod
@@ -115,43 +134,10 @@ class Widget:
         source = layout[5:]
         calculated_checksum = calculate_checksum(source)
         if calculated_checksum != checksum:
-            raise ValueError(f"Checksum failed, expected: {checksum:04x}; actual: {calculated_checksum:04x}")
-        assert calculate_checksum(source) == checksum
+            raise ValueError(f"Checksum failed, expected: {checksum:04X}; actual: {calculated_checksum:04X}")
         return parse_widget(source)[1]
 
     # -Properties
     @property
     def layout(self) -> str:
         return f"{calculate_checksum(str(self)):04x},{str(self)}"
-
-    @property
-    def x(self) -> int:
-        return self.position[0]
-
-    @x.setter
-    def x(self, value: int) -> None:
-        self.position = (value, self.y)
-
-    @property
-    def y(self) -> int:
-        return self.position[1]
-
-    @y.setter
-    def y(self, value: int) -> None:
-        self.position = (self.x, value)
-
-    @property
-    def width(self) -> int:
-        return self.size[0]
-
-    @width.setter
-    def width(self, value: int) -> None:
-        self.size = (value, self.height)
-
-    @property
-    def height(self) -> int:
-        return self.size[1]
-
-    @height.setter
-    def height(self, value: int) -> None:
-        self.size = (self.width, value)

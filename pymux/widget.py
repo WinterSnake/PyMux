@@ -28,23 +28,23 @@ def calculate_checksum(source: str) -> int:
     return checksum
 
 
-def _parse_widget(cls: type[Widget], source: str) -> tuple[str, Widget]:
+def _parse_widget(source: str) -> tuple[str, Widget]:
     """Parse a tmux source string into a nested widget"""
     source, area = _parse_dimensions(source)
     # -Id
     if source[0] == ',':
         source, _id = _parse_int(source[1:])
-        return (source, cls(_id, area))
+        return (source, Widget(_id, area))
     # -Nested Children
     children = []
     orientation, end = NEST_ORIENTATION[source[0]]
-    source, child = _parse_widget(cls, source[1:])
+    source, child = _parse_widget(source[1:])
     children.append(child)
     while source[0] == ',':
-        source, child = _parse_widget(cls, source[1:])
+        source, child = _parse_widget(source[1:])
         children.append(child)
     assert source[0] == end
-    return (source[1:], cls(None, area, orientation, children))
+    return (source[1:], Widget(None, area, orientation, children))
 
 
 def _parse_dimensions(source: str) -> tuple[str, Rectangle]:
@@ -130,21 +130,21 @@ class Widget:
         }[self.orientation]
         return _str + start + children + end
 
-    # -Class Methods
-    @classmethod
-    def from_layout(cls, layout: str) -> Widget:
+    # -Static Methods
+    @staticmethod
+    def from_layout(layout: str) -> Widget:
         '''Return a widget from a layout string with checksum validation'''
         checksum = int(layout[:4], 16)
         source = layout[5:]
         calculated_checksum = calculate_checksum(source)
         if calculated_checksum != checksum:
             raise ValueError(f"Checksum failed, expected: {checksum:04X}; actual: {calculated_checksum:04X}")
-        return _parse_widget(cls, source)[1]
+        return _parse_widget(source)[1]
 
-    @classmethod
-    def from_str(cls, source: str) -> Widget:
+    @staticmethod
+    def from_str(source: str) -> Widget:
         '''Return a widget from a layout string without checksum'''
-        return _parse_widget(cls, source)[1]
+        return _parse_widget(source)[1]
 
     # -Properties
     @property

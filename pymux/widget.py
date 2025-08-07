@@ -28,7 +28,7 @@ def calculate_checksum(source: str) -> int:
     return checksum
 
 
-def parse_widget(cls: type[Widget], source: str) -> tuple[str, Widget]:
+def _parse_widget(cls: type[Widget], source: str) -> tuple[str, Widget]:
     """Parse a tmux source string into a nested widget"""
     source, area = _parse_dimensions(source)
     # -Id
@@ -38,10 +38,10 @@ def parse_widget(cls: type[Widget], source: str) -> tuple[str, Widget]:
     # -Nested Children
     children = []
     orientation, end = NEST_ORIENTATION[source[0]]
-    source, child = parse_widget(cls, source[1:])
+    source, child = _parse_widget(cls, source[1:])
     children.append(child)
     while source[0] == ',':
-        source, child = parse_widget(cls, source[1:])
+        source, child = _parse_widget(cls, source[1:])
         children.append(child)
     assert source[0] == end
     return (source[1:], cls(None, area, orientation, children))
@@ -133,18 +133,18 @@ class Widget:
     # -Class Methods
     @classmethod
     def from_layout(cls, layout: str) -> Widget:
-        '''Validate checksum from a source layout and return widget'''
+        '''Return a widget from a layout string with checksum validation'''
         checksum = int(layout[:4], 16)
         source = layout[5:]
         calculated_checksum = calculate_checksum(source)
         if calculated_checksum != checksum:
             raise ValueError(f"Checksum failed, expected: {checksum:04X}; actual: {calculated_checksum:04X}")
-        return parse_widget(cls, source)[1]
+        return _parse_widget(cls, source)[1]
 
     @classmethod
-    def from_string(cls, source: str) -> Widget:
-        '''Return widget from a base tmux layout string'''
-        return parse_widget(cls, source)[1]
+    def from_str(cls, source: str) -> Widget:
+        '''Return a widget from a layout string without checksum'''
+        return _parse_widget(cls, source)[1]
 
     # -Properties
     @property

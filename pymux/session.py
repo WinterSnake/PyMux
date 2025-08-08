@@ -1,6 +1,5 @@
-#!/usr/bin/python
 ##-------------------------------##
-## PyMux                         ##
+## PyMux Session                 ##
 ## Written By: Ryan Smith        ##
 ##-------------------------------##
 ## Session                       ##
@@ -8,78 +7,59 @@
 
 ## Imports
 from __future__ import annotations
+import os
 import subprocess
+from collections.abc import Iterable
 from .widget import Widget
+
+
+## Functions
+def _run_command(*command: str) -> str:
+    command = ("tmux", *command)
+    process = subprocess.run(command, capture_output=True, text=True)
+    return process.stdout.strip()
+
+
+def _parse_window_widget(session: str, source: str) -> Widget:
+    """Returns a parsed window widget with child panes and processes"""
+    name, index, layout = source.split(';')
+    widget = Widget.from_layout(layout)
+    widget.name = name
+    pane_data = _run_command(
+            "list-panes", "-t", f"{session}:{index}", "-F",
+        "#{pane_index};#{pane_id};#{pane_pid}"
+    )
+    for _pane, (i, pane) in zip(pane_data.split('\n'), enumerate(widget)):
+        idx, _id, pid = _pane.split(';')
+        assert i == int(idx) and pane.id == int(_id[1:])
+    return widget
 
 
 ## Classes
 class Session:
     """
     Tmux Session
-    Represents a tmux session with details to restore/save/load
+    Represents a tmux session with name, windows, and panes
+    Includes methods to interact with session programatically
     """
 
     # -Constructor
-    def __init__(self, name: str) -> None:
+    def __init__(self, name: str, windows: Iterable[Widget]) -> None:
         self.name: str = name
-        self.windows: list[Widget] = []
-
-    # -Dunder Methods
-    def __str__(self) -> str:
-        session: str = self.name + ":\n"
-        for i, window in enumerate(self.windows):
-            session += ' ' + str(window)
-            if i < len(self.windows) - 1:
-                session += '\n'
-        return session
-
-    # -Instance Methods
-    def attach(self) -> None:
-        '''Attach session to client'''
-        subprocess.run(['tmux', 'attach-session', '-t', self.name])
-
-    def close(self) -> None:
-        '''Close and kill session'''
-        subprocess.run(['tmux', 'kill-session', '-t', self.name])
+        self.windows: Iterable[Widget] = windows
 
     # -Static Methods
     @staticmethod
     def current() -> Session | None:
-        '''Gets currently open session'''
-        name = subprocess.run(
-            ['tmux', 'display-message', '-p', '#{session_name}'],
-            capture_output=True, text=True
-        )
-        session = Session(name.stdout[:-1])
-        layouts = subprocess.run(
-            ['tmux', 'list-windows', '-F', '#{window_layout}'],
-            capture_output=True, text=True
-        )
-        # -Windows
-        for i, layout in enumerate(layouts.stdout.split('\n')):
-            # -Ignore Empty
-            if layout == '':
-                continue
-            window = Widget.from_layout(layout)
-            session.windows.append(window)
-            # -TODO: Processes
-        return session
-
-    @staticmethod
-    def get_if_exists(name: str) -> Session | None:
-        '''Returns tmux session if it exists'''
-        result = subprocess.run(
-            ['tmux', 'has-session', '-t', name],
-            stderr=subprocess.DEVNULL,
-        )
-        if result.returncode != 0:
+        if not "TMUX" in os.environ:
             return None
-        session = Session(name)
-        return session
-
-    # -Class Methods
-    @classmethod
-    def new(cls, name: str) -> Session:
-        '''Create a new tmux session and return object'''
-        subprocess.run(['tmux', 'new-session', '-d', '-s', name])
-        return Session(name)
+        name = _run_command("display", "-p", "#{session_name}")
+        windows: list[Widget] = []
+        window_data = _run_command(
+            "list-windows", "-F",
+            "#{window_name};#{window_index};#{window_layout}"
+        )
+        for window in window_data.split('\n'):
+            widget = _parse_window_widget(name, window)
+            windows.append(widget)
+        return Session(name, windows)

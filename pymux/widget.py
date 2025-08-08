@@ -117,6 +117,14 @@ class Widget:
         self.name: str | None = None
 
     # -Dunder Methods
+    def __iter__(self) -> Iterator[Widget]:
+        if not self.children:
+            yield self
+        else:
+            for child in self.children:
+                for pane in child:
+                    yield pane
+
     def __str__(self) -> str:
         _str = f"{self.area.width}x{self.area.height},{self.area.x},{self.area.y}"
         if not self.children:
@@ -150,3 +158,12 @@ class Widget:
     @property
     def layout(self) -> str:
         return f"{calculate_checksum(str(self)):04x},{str(self)}"
+
+    @property
+    def pane_count(self) -> int:
+        count = 0
+        if not self.children:
+            return count + 1
+        for child in self.children:
+            count += child.pane_count
+        return count
